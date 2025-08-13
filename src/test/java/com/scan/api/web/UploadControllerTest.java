@@ -10,12 +10,14 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
 import java.util.UUID;
 
 import static org.mockito.BDDMockito.given;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -25,9 +27,10 @@ class UploadControllerTest {
 
     @Autowired MockMvc mvc;
 
-    @MockBean DocumentService documentService; // <-- interface mockée
+    @MockBean DocumentService documentService;
 
     @Test
+    @WithMockUser(username = "tester", roles = {"USER"})
     void upload_ok_returns200_and_json() throws Exception {
         byte[] pdf = "%PDF-1.7\n%âãÏÓ\n".getBytes();
         MockMultipartFile file = new MockMultipartFile(
@@ -48,7 +51,7 @@ class UploadControllerTest {
                 ArgumentMatchers.any(), ArgumentMatchers.anyLong()
         )).willReturn(doc);
 
-        mvc.perform(multipart("/api/upload").file(file))
+        mvc.perform(multipart("/api/upload").file(file).with(csrf())) // <-- CSRF
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(doc.getId().toString()))
                 .andExpect(jsonPath("$.name").value("test.pdf"))
@@ -57,12 +60,14 @@ class UploadControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "tester", roles = {"USER"})
     void upload_missingFile_returns400() throws Exception {
-        mvc.perform(multipart("/api/upload"))
+        mvc.perform(multipart("/api/upload").with(csrf())) // <-- CSRF
                 .andExpect(status().isBadRequest());
     }
 
     @Test
+    @WithMockUser(username = "tester", roles = {"USER"})
     void download_ok_streams_bytes_with_headers() throws Exception {
         UUID id = UUID.randomUUID();
         byte[] content = "%PDF-1.7\nfake\n".getBytes();
@@ -80,6 +85,7 @@ class UploadControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "tester", roles = {"USER"})
     void download_notFound_returns404() throws Exception {
         UUID id = UUID.randomUUID();
         given(documentService.download(id))
@@ -87,5 +93,11 @@ class UploadControllerTest {
 
         mvc.perform(get("/api/download/{id}", id))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void download_withoutAuth_returns401() throws Exception {
+        mvc.perform(get("/api/download/{id}", UUID.randomUUID()))
+                .andExpect(status().isUnauthorized());
     }
 }

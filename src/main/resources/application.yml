@@ -18,6 +18,9 @@ spring:
       max-request-size: 20MB
 
 app:
+  jwt:
+    secret: "change-me-please-very-long-random-secret-64chars-min"
+    expiration-minutes: 120
   s3:
     endpoint: http://localhost:9000
     region: eu-west-3
