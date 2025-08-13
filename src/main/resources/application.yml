@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: my-scan-doc-api
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/myscandoc
+    username: scan
+    password: scanpwd
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate.jdbc.time_zone: UTC
+
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+
+app:
+  s3:
+    endpoint: http://localhost:9000
+    region: eu-west-3
+    bucket: scanned-docs
+    access-key: minio
+    secret-key: minio12345
+    path-style-access: true
