@@ -1,14 +1,15 @@
 package com.scan.api.service;
 
-
-
 import com.scan.api.domain.Document;
-
+   // NEW
+import com.scan.api.outbox.event.DocumentCreatedEvent;
 import com.scan.api.repository.DocumentRepository;
+import com.scan.api.repository.OutboxRepository;
 import com.scan.api.storage.StorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional; // NEW
 
 import java.io.*;
 import java.security.MessageDigest;
@@ -24,13 +25,18 @@ public class DocumentServiceImpl implements DocumentService {
 
     private final DocumentRepository repository;
     private final StorageService storage;
+    private final OutboxRepository outbox;
 
     @Override
+    @Transactional
     public Document savePdf(String originalFilename, String contentType, InputStream in, long size) throws IOException {
-        if (size <= 0 || size > 20 * 1024 * 1024) throw new IllegalArgumentException("Taille invalide (max 20MB)");
+        if (size <= 0 || size > 20 * 1024 * 1024)
+            throw new IllegalArgumentException("Taille invalide (max 20MB)");
 
         byte[] head = in.readNBytes(5);
-        if (!new String(head).startsWith(PDF_MAGIC)) throw new IllegalArgumentException("Pas un PDF valide");
+        if (!new String(head).startsWith(PDF_MAGIC))
+            throw new IllegalArgumentException("Pas un PDF valide");
+
         byte[] rest = in.readAllBytes();
         byte[] all = new byte[head.length + rest.length];
         System.arraycopy(head, 0, all, 0, head.length);
@@ -40,9 +46,11 @@ public class DocumentServiceImpl implements DocumentService {
         var existing = repository.findBySha256(sha);
         if (existing.isPresent()) return existing.get();
 
+        // 1) Stockage objet (MinIO/S3)
         String key = storage.store(new ByteArrayInputStream(all), all.length,
                 MediaType.APPLICATION_PDF_VALUE, "pdf");
 
+        // 2) Persistance meta
         Document doc = Document.builder()
                 .originalFilename(originalFilename == null ? "document.pdf" : originalFilename)
                 .size(all.length)
@@ -51,8 +59,19 @@ public class DocumentServiceImpl implements DocumentService {
                 .s3Key(key)
                 .createdAt(Instant.now())
                 .build();
+        doc = repository.save(doc);
 
-        return repository.save(doc);
+        // 3) Enqueue Outbox (même transaction)
+        var evt = new DocumentCreatedEvent(
+                doc.getId(),
+                doc.getOriginalFilename(),
+                doc.getS3Key(),
+                doc.getContentType(),
+                doc.getSize()
+        );
+        outbox.enqueue(doc.getId(), "DocumentCreated", evt);   // NEW
+
+        return doc;
     }
 
     @Override

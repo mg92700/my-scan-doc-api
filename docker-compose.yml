@@ -47,3 +47,59 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+  # --- Kafka en mode KRaft (sans Zookeeper), accessible depuis l’hôte Windows ---
+  kafka:
+    image: bitnami/kafka:3.7
+    container_name: kafka
+    environment:
+      # KRaft single-node
+      KAFKA_CFG_NODE_ID: 1
+      KAFKA_CFG_PROCESS_ROLES: broker,controller
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+
+      # 2 listeners : interne (pour autres containers) et externe (pour ton app locale)
+      KAFKA_CFG_LISTENERS: INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: INTERNAL
+
+      # QoS producteur (tu peux les mettre aussi côté Spring)
+      KAFKA_CFG_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CFG_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_CFG_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    ports:
+      - "9092:9092"     # pour ton Spring Boot local (bootstrap-servers=localhost:9092)
+    volumes:
+      - ./kafka-data:/bitnami/kafka
+    healthcheck:
+      test: ["CMD", "bash", "-c", "kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Crée le topic 'documents.created' au démarrage
+  kafka-init:
+    image: bitnami/kafka:3.7
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: >
+      bash -c "
+      kafka-topics.sh --bootstrap-server kafka:29092
+        --create --if-not-exists --topic documents.created
+        --partitions 3 --replication-factor 1
+      "
+    restart: "no"
+
+  # UI pour Kafka (optionnel mais pratique)
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    ports:
+      - "8081:8080"

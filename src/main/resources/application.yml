@@ -16,8 +16,23 @@ spring:
     multipart:
       max-file-size: 20MB
       max-request-size: 20MB
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
 app:
+  kafka:
+    topic-doc-created: documents.created
+  outbox:
+    relay:
+      enabled: true
+      batch-size: 500
+      fixed-delay-ms: 1000
   jwt:
     secret: "change-me-please-very-long-random-secret-64chars-min"
     expiration-minutes: 120
