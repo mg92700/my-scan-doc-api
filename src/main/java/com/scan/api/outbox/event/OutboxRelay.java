@@ -29,6 +29,12 @@ public class OutboxRelay {
     @Value("${app.outbox.relay.batch-size:500}")
     private int batchSize;
 
+    public OutboxRelay(OutboxRepository repo, OutboxPublisher publisher, PlatformTransactionManager txManager) {
+        this.repo = repo;
+        this.publisher = publisher;
+        this.txManager = txManager;
+    }
+
     @Scheduled(fixedDelayString = "${app.outbox.relay.fixed-delay-ms:1000}")
     public void run() {
         if (!enabled) return;
