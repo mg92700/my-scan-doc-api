@@ -1,0 +1,125 @@
+package com.scan.api.infrastructure.adapter.in.web;
+
+import com.scan.api.domain.model.Document;
+import com.scan.api.domain.model.DocumentNotFoundException;
+import com.scan.api.domain.port.in.DocumentUseCase;
+import com.scan.api.infrastructure.security.JwtService;
+import com.scan.api.infrastructure.security.SecurityConfig;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.io.InputStream;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import static org.hamcrest.Matchers.containsString;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+@WebMvcTest(controllers = {UploadController.class, AuthController.class})
+@Import({SecurityConfig.class, JwtService.class})
+class UploadControllerTest {
+
+    private static final byte[] PDF = "%PDF-1.4\n%%EOF\n".getBytes();
+
+    @Autowired MockMvc mvc;
+    @Autowired JwtService jwtService;
+    @MockitoBean DocumentUseCase documentUseCase;
+
+    private String bearer() {
+        return "Bearer " + jwtService.generate("admin", Map.of("roles", List.of("ROLE_ADMIN")));
+    }
+
+    @Test
+    void login_retourne_un_token_valide() throws Exception {
+        mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"admin\",\"password\":\"admin123\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").isNotEmpty());
+    }
+
+    @Test
+    void login_mauvais_mot_de_passe() throws Exception {
+        mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"admin\",\"password\":\"nope\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void upload_sans_authentification_refuse() throws Exception {
+        mvc.perform(multipart("/api/upload").file(new MockMultipartFile("file", "a.pdf", "application/pdf", PDF)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void upload_avec_jwt() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(documentUseCase.savePdf(eq("a.pdf"), eq("application/pdf"), any(InputStream.class), eq((long) PDF.length)))
+                .thenReturn(Document.builder().id(id).originalFilename("a.pdf").size(PDF.length).s3Key("k.pdf").build());
+
+        mvc.perform(multipart("/api/upload")
+                        .file(new MockMultipartFile("file", "a.pdf", "application/pdf", PDF))
+                        .header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(id.toString()))
+                .andExpect(jsonPath("$.name").value("a.pdf"))
+                .andExpect(jsonPath("$.key").value("k.pdf"));
+    }
+
+    @Test
+    void upload_fichier_vide() throws Exception {
+        mvc.perform(multipart("/api/upload")
+                        .file(new MockMultipartFile("file", "a.pdf", "application/pdf", new byte[0]))
+                        .header("Authorization", bearer()))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void upload_fichier_invalide_400() throws Exception {
+        when(documentUseCase.savePdf(any(), any(), any(), anyLong()))
+                .thenThrow(new IllegalArgumentException("Pas un PDF valide"));
+
+        mvc.perform(multipart("/api/upload")
+                        .file(new MockMultipartFile("file", "a.txt", "text/plain", "hello".getBytes()))
+                        .header("Authorization", bearer()))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string("Pas un PDF valide"));
+    }
+
+    @Test
+    void download_avec_jwt() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(documentUseCase.download(id))
+                .thenReturn(new DocumentUseCase.DownloadResult("mon doc.pdf", "application/pdf", PDF));
+
+        mvc.perform(get("/api/download/{id}", id).header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_PDF))
+                .andExpect(header().string("Content-Disposition", containsString("filename*=UTF-8''mon%20doc.pdf")))
+                .andExpect(content().bytes(PDF));
+    }
+
+    @Test
+    void download_inconnu_404() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(documentUseCase.download(id)).thenThrow(new DocumentNotFoundException(id));
+
+        mvc.perform(get("/api/download/{id}", id).header("Authorization", bearer()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void jwt_invalide_refuse() throws Exception {
+        mvc.perform(get("/api/download/{id}", UUID.randomUUID()).header("Authorization", "Bearer abc.def.ghi"))
+                .andExpect(status().isUnauthorized());
+    }
+}

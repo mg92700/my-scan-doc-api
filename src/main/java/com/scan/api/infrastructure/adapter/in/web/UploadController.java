@@ -49,7 +49,7 @@ public class UploadController {
         var res = documentUseCase.download(id);
         String filename = res.filename() == null ? "document.pdf" : res.filename();
         String dispo = "attachment; filename*=UTF-8''" +
-                URLEncoder.encode(filename, StandardCharsets.UTF_8);
+                URLEncoder.encode(filename, StandardCharsets.UTF_8).replace("+", "%20"); // RFC 5987
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(
                         res.contentType() == null ? MediaType.APPLICATION_PDF_VALUE : res.contentType()))

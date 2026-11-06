@@ -32,7 +32,8 @@ class DocumentJpaEntity {
     @Column(nullable = false, length = 64, unique = true)
     private String sha256;
 
-    @Column(nullable = false, length = 500)
+    // Nom explicite : Hibernate 7 (Boot 4) dériverait "s3_key", Boot 3 produisait "s3key".
+    @Column(name = "s3key", nullable = false, length = 500)
     private String s3Key;
 
     @Column(nullable = false)

@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 class KafkaOutboxPublisher {
 
-    private final KafkaTemplate<String, Object> kafka;
+    private final KafkaTemplate<String, String> kafka;
 
     @Value("${app.kafka.topic-doc-created:documents.created}")
     private String topicDocCreated;
@@ -25,7 +25,7 @@ class KafkaOutboxPublisher {
             case "DocumentCreated" -> topicDocCreated;
             default -> throw new IllegalArgumentException("Unknown outbox type: " + type);
         };
-        SendResult<String, Object> result = kafka.send(topic, key, payload).get();
+        SendResult<String, String> result = kafka.send(topic, key, payload).get();
         return result.getRecordMetadata();
     }
 }

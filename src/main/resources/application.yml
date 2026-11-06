@@ -7,6 +7,7 @@ spring:
     username: scan
     password: scanpwd
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: update
     properties:
@@ -23,7 +24,8 @@ spring:
       properties:
         enable.idempotence: true
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
+      # le payload outbox est déjà du JSON (jsonb::text) : on l'envoie tel quel
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
 app:
   kafka:

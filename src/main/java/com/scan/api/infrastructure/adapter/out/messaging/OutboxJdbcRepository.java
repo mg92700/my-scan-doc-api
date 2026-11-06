@@ -42,7 +42,8 @@ class OutboxJdbcRepository {
     }
 
     void markFailed(long id, String error) {
-        String msg = error == null ? "" : (error.length() > 2000 ? error.substring(0, 2000) : error);
+        // la colonne last_error est un varchar(255) : au-delà, l'UPDATE échouerait et ferait rollback du lot
+        String msg = error == null ? "" : (error.length() > 255 ? error.substring(0, 255) : error);
         jdbc.update("""
             UPDATE outbox SET attempts = attempts + 1, last_error = ? WHERE id = ?
         """, msg, id);

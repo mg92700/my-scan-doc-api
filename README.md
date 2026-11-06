@@ -2,7 +2,7 @@
 
 # 📄 my-scan-doc-api
 
-**my-scan-doc-api** est une API Spring Boot 3 / Java 21 permettant de :
+**my-scan-doc-api** est une API Spring Boot 4 / Java 21 permettant de :
 - 📤 **Uploader** des documents scannés (PDF) vers un stockage **S3-compatible** (MinIO en dev).
 - 📥 **Télécharger** des documents via leur identifiant unique.
 - 💾 **Gérer les métadonnées** des documents dans PostgreSQL.
@@ -11,11 +11,12 @@
 
 ## 🚀 Stack technique
 
-- **Backend** : Spring Boot 3.3.x (Java 21)
-- **Stockage objet** : MinIO (compatible AWS S3)
+- **Backend** : Spring Boot 4.1.x (Java 21, Spring Framework 7, Hibernate 7, Jackson 3)
+- **Stockage objet** : MinIO (compatible AWS S3) — image `cgr.dev/chainguard/minio` (les images `minio/*` ne sont plus publiées sur Docker Hub)
+- **Messaging** : Kafka (pattern Outbox → topic `documents.created`)
 - **Base de données** : PostgreSQL 16
 - **ORM** : Spring Data JPA (Hibernate)
-- **Tests** : JUnit 5 + MockMvc
+- **Tests** : JUnit 5 + MockMvc + Testcontainers (Postgres, Kafka, MinIO)
 - **Build** : Maven 3.9+
 - **Containerisation** : Docker & Docker Compose
 
@@ -97,13 +98,17 @@ Retour HTTP avec Content-Disposition: attachment.
 
 🧪 Tests
 
-Lancer les tests unitaires (MockMvc) :
+Lancer les tests (unitaires, MockMvc, et intégration Testcontainers — Docker requis) :
 ./mvnw test
 📂 Couverture :
 
 Upload OK / KO
 
 Download OK / NotFound (404)
+
+Sécurité JWT (401 sans token / token invalide)
+
+Flux complet upload → MinIO + Postgres + Outbox → Kafka → download
 
 🔒 Sécurité (optionnelle)
 

@@ -2,6 +2,7 @@ package com.scan.api.application.service;
 
 import com.scan.api.domain.model.Document;
 import com.scan.api.domain.model.DocumentCreatedEvent;
+import com.scan.api.domain.model.DocumentNotFoundException;
 import com.scan.api.domain.port.in.DocumentUseCase;
 import com.scan.api.domain.port.out.DocumentRepositoryPort;
 import com.scan.api.domain.port.out.OutboxPort;
@@ -98,7 +99,7 @@ public class DocumentService implements DocumentUseCase {
     @Override
     public DownloadResult download(UUID id) {
         Document doc = repository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Document introuvable: " + id));
+                .orElseThrow(() -> new DocumentNotFoundException(id));
         byte[] bytes = storage.get(doc.getS3Key());
         return new DownloadResult(doc.getOriginalFilename(), doc.getContentType(), bytes);
     }
