@@ -1,8 +1,10 @@
 package com.scan.api.infrastructure.adapter.out.persistence;
 
 import com.scan.api.domain.model.Document;
+import com.scan.api.domain.model.DocumentAlreadyExistsException;
 import com.scan.api.domain.port.out.DocumentRepositoryPort;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
@@ -21,8 +23,16 @@ public class DocumentJpaAdapter implements DocumentRepositoryPort {
     @Override
     public Document save(Document document) {
         DocumentJpaEntity entity = toEntity(document);
-        DocumentJpaEntity saved = jpaRepository.save(entity);
-        return toDomain(saved);
+        try {
+            // flush immédiat : une violation de contrainte remonte ici, pas au commit
+            return toDomain(jpaRepository.saveAndFlush(entity));
+        } catch (DataIntegrityViolationException e) {
+            if (document.getSha256() != null
+                    && jpaRepository.findBySha256(document.getSha256()).isPresent()) {
+                throw new DocumentAlreadyExistsException(document.getSha256(), e);
+            }
+            throw e;
+        }
     }
 
     @Override

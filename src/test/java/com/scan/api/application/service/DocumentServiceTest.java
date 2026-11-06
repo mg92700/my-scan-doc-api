@@ -1,7 +1,9 @@
 package com.scan.api.application.service;
 
 import com.scan.api.domain.model.Document;
+import com.scan.api.domain.model.DocumentAlreadyExistsException;
 import com.scan.api.domain.model.DocumentNotFoundException;
+import com.scan.api.domain.model.StorageException;
 import com.scan.api.domain.port.in.DocumentUseCase;
 import com.scan.api.domain.port.out.DocumentRepositoryPort;
 import com.scan.api.domain.port.out.StoragePort;
@@ -74,6 +76,61 @@ class DocumentServiceTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> service.savePdf("a.pdf", "application/pdf", new ByteArrayInputStream(PDF), 21L * 1024 * 1024))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void savePdf_rejette_si_taille_reelle_depasse_la_limite_malgre_taille_declaree() {
+        byte[] big = new byte[DocumentService.MAX_SIZE + 1];
+        System.arraycopy(PDF, 0, big, 0, PDF.length);
+        assertThatThrownBy(() -> service.savePdf("a.pdf", "application/pdf", new ByteArrayInputStream(big), 10))
+                .isInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(storage);
+    }
+
+    @Test
+    void savePdf_upload_concurrent_supprime_l_objet_et_retourne_le_gagnant() throws Exception {
+        Document winner = Document.builder().id(UUID.randomUUID()).s3Key("winner").build();
+        when(repository.findBySha256(anyString())).thenReturn(Optional.empty(), Optional.of(winner));
+        when(storage.store(any(), anyLong(), any(), any())).thenReturn("loser");
+        when(repository.save(any())).thenThrow(new DocumentAlreadyExistsException("sha", null));
+
+        Document doc = service.savePdf("a.pdf", "application/pdf", new ByteArrayInputStream(PDF), PDF.length);
+
+        assertThat(doc).isSameAs(winner);
+        verify(storage).delete("loser");
+    }
+
+    @Test
+    void savePdf_echec_persistance_supprime_l_objet_et_propage() {
+        when(repository.findBySha256(anyString())).thenReturn(Optional.empty());
+        when(storage.store(any(), anyLong(), any(), any())).thenReturn("k");
+        when(repository.save(any())).thenThrow(new IllegalStateException("db down"));
+
+        assertThatThrownBy(() -> service.savePdf("a.pdf", "application/pdf", new ByteArrayInputStream(PDF), PDF.length))
+                .isInstanceOf(IllegalStateException.class).hasMessage("db down");
+        verify(storage).delete("k");
+    }
+
+    @Test
+    void savePdf_echec_compensation_ne_masque_pas_l_erreur_d_origine() {
+        when(repository.findBySha256(anyString())).thenReturn(Optional.empty());
+        when(storage.store(any(), anyLong(), any(), any())).thenReturn("k");
+        when(repository.save(any())).thenThrow(new IllegalStateException("db down"));
+        doThrow(new StorageException("s3 down", null)).when(storage).delete("k");
+
+        assertThatThrownBy(() -> service.savePdf("a.pdf", "application/pdf", new ByteArrayInputStream(PDF), PDF.length))
+                .isInstanceOf(IllegalStateException.class).hasMessage("db down");
+    }
+
+    @Test
+    void sanitizeFilename() {
+        assertThat(DocumentService.sanitizeFilename(null)).isEqualTo("document.pdf");
+        assertThat(DocumentService.sanitizeFilename("   ")).isEqualTo("document.pdf");
+        assertThat(DocumentService.sanitizeFilename("C:\\Users\\x\\scan.pdf")).isEqualTo("scan.pdf");
+        assertThat(DocumentService.sanitizeFilename("../../etc/a.pdf")).isEqualTo("a.pdf");
+        assertThat(DocumentService.sanitizeFilename("a\r\nb.pdf")).isEqualTo("ab.pdf");
+        String longName = DocumentService.sanitizeFilename("x".repeat(400) + ".pdf");
+        assertThat(longName).hasSize(255).endsWith(".pdf");
     }
 
     @Test

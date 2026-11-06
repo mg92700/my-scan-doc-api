@@ -54,8 +54,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 Authentication authToken =
                         new UsernamePasswordAuthenticationToken(username, null, authorities);
                 SecurityContextHolder.getContext().setAuthentication(authToken);
-            } catch (JwtException ex) {
-                // Token invalide — Spring Security rejettera si la route est protégée
+            } catch (JwtException | IllegalArgumentException ex) {
+                // Token invalide ou vide ("Bearer ") — Spring Security rejettera si la route est protégée
+                SecurityContextHolder.clearContext();
             }
         }
         chain.doFilter(request, response);

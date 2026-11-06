@@ -22,6 +22,14 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -57,6 +65,7 @@ class DocumentFlowIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper objectMapper;
     @Autowired JdbcTemplate jdbc;
+    @Autowired S3Client s3;
 
     @BeforeAll
     static void createBucket(@Autowired S3Client s3) {
@@ -84,11 +93,52 @@ class DocumentFlowIntegrationTest {
         mvc.perform(multipart("/api/upload").file(file).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(id));
-        assertThat(jdbc.queryForObject("select count(*) from documents", Long.class)).isEqualTo(1L);
+        assertThat(jdbc.queryForObject("select count(*) from documents where sha256 = ?",
+                Long.class, sha256Hex(pdf))).isEqualTo(1L);
 
         // download : bytes identiques depuis MinIO
         mvc.perform(get("/api/download/{id}", id).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(content().bytes(pdf));
+    }
+
+    @Test
+    void uploads_concurrents_du_meme_fichier_un_seul_document_et_un_seul_objet() throws Exception {
+        String token = objectMapper.readTree(mvc.perform(post("/auth/login")
+                        .contentType("application/json")
+                        .content("{\"username\":\"admin\",\"password\":\"admin123\"}"))
+                .andReturn().getResponse().getContentAsString()).get("token").asString();
+
+        byte[] pdf = ("%PDF-1.4\n% concurrent " + System.nanoTime() + "\n%%EOF\n").getBytes();
+        var file = new MockMultipartFile("file", "c.pdf", "application/pdf", pdf);
+        long objectsBefore = s3.listObjectsV2(b -> b.bucket("scanned-docs")).keyCount();
+
+        int n = 8;
+        var start = new CountDownLatch(1);
+        try (ExecutorService pool = Executors.newFixedThreadPool(n)) {
+            List<Future<String>> results = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                results.add(pool.submit(() -> {
+                    start.await();
+                    var res = mvc.perform(multipart("/api/upload").file(file)
+                            .header("Authorization", "Bearer " + token)).andReturn().getResponse();
+                    assertThat(res.getStatus()).isEqualTo(200);
+                    return objectMapper.readTree(res.getContentAsString()).get("id").asString();
+                }));
+            }
+            start.countDown();
+            Set<String> ids = new HashSet<>();
+            for (Future<String> f : results) ids.add(f.get());
+            assertThat(ids).hasSize(1);
+        }
+
+        assertThat(jdbc.queryForObject("select count(*) from documents where s3key is not null and sha256 = ?",
+                Long.class, sha256Hex(pdf))).isEqualTo(1L);
+        // les perdants ont supprimé leur objet : un seul nouvel objet dans le bucket
+        assertThat(s3.listObjectsV2(b -> b.bucket("scanned-docs")).keyCount()).isEqualTo(objectsBefore + 1);
+    }
+
+    private static String sha256Hex(byte[] data) throws Exception {
+        return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(data));
     }
 }

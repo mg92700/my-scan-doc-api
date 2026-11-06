@@ -11,6 +11,12 @@ import java.util.UUID;
  */
 public interface DocumentRepositoryPort {
 
+    /**
+     * Persiste immédiatement le document.
+     *
+     * @throws com.scan.api.domain.model.DocumentAlreadyExistsException
+     *         si un document de même sha256 existe déjà
+     */
     Document save(Document document);
 
     Optional<Document> findById(UUID id);

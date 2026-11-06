@@ -2,6 +2,7 @@ package com.scan.api.infrastructure.adapter.in.web;
 
 import com.scan.api.domain.model.Document;
 import com.scan.api.domain.model.DocumentNotFoundException;
+import com.scan.api.domain.model.StorageException;
 import com.scan.api.domain.port.in.DocumentUseCase;
 import com.scan.api.infrastructure.security.JwtService;
 import com.scan.api.infrastructure.security.SecurityConfig;
@@ -115,6 +116,37 @@ class UploadControllerTest {
 
         mvc.perform(get("/api/download/{id}", id).header("Authorization", bearer()))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void stockage_indisponible_503() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(documentUseCase.download(id)).thenThrow(new StorageException("boom", null));
+
+        mvc.perform(get("/api/download/{id}", id).header("Authorization", bearer()))
+                .andExpect(status().isServiceUnavailable());
+    }
+
+    @Test
+    void erreur_inattendue_500_sans_details() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(documentUseCase.download(id)).thenThrow(new IllegalStateException("secret interne"));
+
+        mvc.perform(get("/api/download/{id}", id).header("Authorization", bearer()))
+                .andExpect(status().isInternalServerError())
+                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("secret"))));
+    }
+
+    @Test
+    void id_mal_forme_400() throws Exception {
+        mvc.perform(get("/api/download/{id}", "pas-un-uuid").header("Authorization", bearer()))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void bearer_vide_refuse() throws Exception {
+        mvc.perform(get("/api/download/{id}", UUID.randomUUID()).header("Authorization", "Bearer "))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

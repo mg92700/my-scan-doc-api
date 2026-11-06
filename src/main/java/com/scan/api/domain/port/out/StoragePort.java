@@ -5,6 +5,9 @@ import java.io.InputStream;
 /**
  * Port sortant — abstraction du stockage objet.
  * L'implémentation S3 est dans infrastructure/adapter/out/storage/.
+ *
+ * Toutes les méthodes lèvent {@link com.scan.api.domain.model.StorageException}
+ * en cas d'échec technique.
  */
 public interface StoragePort {
 
@@ -17,4 +20,9 @@ public interface StoragePort {
      * Retourne les bytes associés à une clé.
      */
     byte[] get(String key);
+
+    /**
+     * Supprime l'objet associé à une clé (idempotent : sans effet si absent).
+     */
+    void delete(String key);
 }
