@@ -1,6 +1,6 @@
 package com.scan.api.infrastructure.adapter.out.messaging;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.scan.api.domain.port.out.OutboxPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
