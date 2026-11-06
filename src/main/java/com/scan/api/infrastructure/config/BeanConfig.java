@@ -3,7 +3,6 @@ package com.scan.api.infrastructure.config;
 import com.scan.api.application.service.DocumentService;
 import com.scan.api.domain.port.in.DocumentUseCase;
 import com.scan.api.domain.port.out.DocumentRepositoryPort;
-import com.scan.api.domain.port.out.OutboxPort;
 import com.scan.api.domain.port.out.StoragePort;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,8 +13,8 @@ import org.springframework.context.annotation.Configuration;
  * DocumentService (domaine) ne porte aucune annotation @Service :
  * il reste un POJO pur. Spring le connaît uniquement via ce @Bean.
  *
- * Les implémentations concrètes (DocumentJpaAdapter, S3StorageAdapter,
- * OutboxJdbcAdapter) sont injectées automatiquement car annotées @Component.
+ * Les implémentations concrètes (DocumentJpaAdapter, S3StorageAdapter)
+ * sont injectées automatiquement car annotées @Component.
  */
 @Configuration
 public class BeanConfig {
@@ -23,9 +22,8 @@ public class BeanConfig {
     @Bean
     public DocumentUseCase documentUseCase(
             DocumentRepositoryPort repository,
-            StoragePort storage,
-            OutboxPort outbox
+            StoragePort storage
     ) {
-        return new DocumentService(repository, storage, outbox);
+        return new DocumentService(repository, storage);
     }
 }

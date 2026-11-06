@@ -1,11 +1,9 @@
 package com.scan.api.application.service;
 
 import com.scan.api.domain.model.Document;
-import com.scan.api.domain.model.DocumentCreatedEvent;
 import com.scan.api.domain.model.DocumentNotFoundException;
 import com.scan.api.domain.port.in.DocumentUseCase;
 import com.scan.api.domain.port.out.DocumentRepositoryPort;
-import com.scan.api.domain.port.out.OutboxPort;
 import com.scan.api.domain.port.out.StoragePort;
 import org.springframework.http.MediaType;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,7 +19,7 @@ import java.util.UUID;
 /**
  * Implémentation du use case DocumentUseCase.
  *
- * Dépend UNIQUEMENT des ports (interfaces) — aucun import JPA, S3, Kafka.
+ * Dépend UNIQUEMENT des ports (interfaces) — aucun import JPA ni S3.
  * Le wiring Spring est fait dans infrastructure/config/BeanConfig.java.
  *
  * Note : @Transactional est la seule annotation Spring autorisée ici.
@@ -34,14 +32,11 @@ public class DocumentService implements DocumentUseCase {
 
     private final DocumentRepositoryPort repository;
     private final StoragePort storage;
-    private final OutboxPort outbox;
 
     public DocumentService(DocumentRepositoryPort repository,
-                           StoragePort storage,
-                           OutboxPort outbox) {
+                           StoragePort storage) {
         this.repository = repository;
         this.storage = storage;
-        this.outbox = outbox;
     }
 
     @Override
@@ -82,16 +77,6 @@ public class DocumentService implements DocumentUseCase {
                 .createdAt(Instant.now())
                 .build();
         doc = repository.save(doc);
-
-        // --- Outbox (même transaction) ---
-        outbox.enqueue(doc.getId(), "DocumentCreated",
-                new DocumentCreatedEvent(
-                        doc.getId(),
-                        doc.getOriginalFilename(),
-                        doc.getS3Key(),
-                        doc.getContentType(),
-                        doc.getSize()
-                ));
 
         return doc;
     }

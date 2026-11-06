@@ -15,7 +15,6 @@ public interface DocumentUseCase {
 
     /**
      * Valide, dédoublonne et stocke un PDF.
-     * Enqueue un événement Outbox dans la même transaction.
      */
     Document savePdf(String originalFilename, String contentType,
                      InputStream in, long size) throws IOException;

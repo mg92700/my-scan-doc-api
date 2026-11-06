@@ -13,10 +13,10 @@
 
 - **Backend** : Spring Boot 4.1.x (Java 21, Spring Framework 7, Hibernate 7, Jackson 3)
 - **Stockage objet** : MinIO (compatible AWS S3) — image `cgr.dev/chainguard/minio` (les images `minio/*` ne sont plus publiées sur Docker Hub)
-- **Messaging** : Kafka (pattern Outbox → topic `documents.created`)
+- **Messaging** : aucun pour l'instant
 - **Base de données** : PostgreSQL 16
 - **ORM** : Spring Data JPA (Hibernate)
-- **Tests** : JUnit 5 + MockMvc + Testcontainers (Postgres, Kafka, MinIO)
+- **Tests** : JUnit 5 + MockMvc + Testcontainers (Postgres, MinIO)
 - **Build** : Maven 3.9+
 - **Containerisation** : Docker & Docker Compose
 
@@ -108,7 +108,7 @@ Download OK / NotFound (404)
 
 Sécurité JWT (401 sans token / token invalide)
 
-Flux complet upload → MinIO + Postgres + Outbox → Kafka → download
+Flux complet upload → MinIO + Postgres → download
 
 🔒 Sécurité (optionnelle)
 

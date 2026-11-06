@@ -1,11 +1,9 @@
 package com.scan.api.application.service;
 
 import com.scan.api.domain.model.Document;
-import com.scan.api.domain.model.DocumentCreatedEvent;
 import com.scan.api.domain.model.DocumentNotFoundException;
 import com.scan.api.domain.port.in.DocumentUseCase;
 import com.scan.api.domain.port.out.DocumentRepositoryPort;
-import com.scan.api.domain.port.out.OutboxPort;
 import com.scan.api.domain.port.out.StoragePort;
 import org.junit.jupiter.api.Test;
 
@@ -27,11 +25,10 @@ class DocumentServiceTest {
 
     private final DocumentRepositoryPort repository = mock(DocumentRepositoryPort.class);
     private final StoragePort storage = mock(StoragePort.class);
-    private final OutboxPort outbox = mock(OutboxPort.class);
-    private final DocumentService service = new DocumentService(repository, storage, outbox);
+    private final DocumentService service = new DocumentService(repository, storage);
 
     @Test
-    void savePdf_stocke_persiste_et_enqueue_l_evenement() throws Exception {
+    void savePdf_stocke_et_persiste_le_document() throws Exception {
         UUID id = UUID.randomUUID();
         when(repository.findBySha256(anyString())).thenReturn(Optional.empty());
         when(storage.store(any(InputStream.class), eq((long) PDF.length), eq("application/pdf"), eq("pdf")))
@@ -48,8 +45,6 @@ class DocumentServiceTest {
         assertThat(doc.getS3Key()).isEqualTo("2026/01/01/x.pdf");
         assertThat(doc.getSize()).isEqualTo(PDF.length);
         assertThat(doc.getSha256()).hasSize(64);
-        verify(outbox).enqueue(eq(id), eq("DocumentCreated"),
-                eq(new DocumentCreatedEvent(id, "scan.pdf", "2026/01/01/x.pdf", "application/pdf", PDF.length)));
     }
 
     @Test
@@ -60,7 +55,7 @@ class DocumentServiceTest {
         Document doc = service.savePdf("a.pdf", "application/pdf", new ByteArrayInputStream(PDF), PDF.length);
 
         assertThat(doc).isSameAs(existing);
-        verifyNoInteractions(storage, outbox);
+        verifyNoInteractions(storage);
         verify(repository, never()).save(any());
     }
 
@@ -70,7 +65,7 @@ class DocumentServiceTest {
         assertThatThrownBy(() -> service.savePdf("a.txt", "text/plain", new ByteArrayInputStream(txt), txt.length))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("PDF");
-        verifyNoInteractions(storage, outbox);
+        verifyNoInteractions(storage);
     }
 
     @Test
