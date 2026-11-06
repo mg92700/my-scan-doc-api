@@ -29,18 +29,18 @@ public class JwtService {
         Instant now = Instant.now();
         Instant exp = now.plusSeconds(expirationMinutes * 60);
         return Jwts.builder()
-                .setSubject(username)
-                .addClaims(claims)
-                .setIssuedAt(Date.from(now))
-                .setExpiration(Date.from(exp))
-                .signWith(key, SignatureAlgorithm.HS256)
+                .subject(username)
+                .claims(claims)
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(exp))
+                .signWith(key, Jwts.SIG.HS256)
                 .compact();
     }
 
     public Jws<Claims> parse(String jwt) throws JwtException {
-        return Jwts.parserBuilder()
-                .setSigningKey(key)
+        return Jwts.parser()
+                .verifyWith(key)
                 .build()
-                .parseClaimsJws(jwt);
+                .parseSignedClaims(jwt);
     }
 }

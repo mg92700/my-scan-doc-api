@@ -41,9 +41,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             String token = auth.substring(7);
             try {
                 Jws<Claims> jws = jwtService.parse(token);
-                String username = jws.getBody().getSubject();
+                String username = jws.getPayload().getSubject();
 
-                Object rolesObj = jws.getBody().get("roles");
+                Object rolesObj = jws.getPayload().get("roles");
                 List<GrantedAuthority> authorities = new ArrayList<>();
                 if (rolesObj instanceof Collection<?> roles) {
                     for (Object r : roles) {
