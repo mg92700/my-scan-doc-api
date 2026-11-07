@@ -1,10 +1,11 @@
 # 📄 my-scan-doc-api
 
 **my-scan-doc-api** est une API Spring Boot 4 / Java 21 qui permet de :
-- 📤 **Uploader** des documents scannés (PDF) vers un stockage **compatible S3** (Supabase Storage en production, MinIO en local).
+- 📤 **Uploader** des documents scannés (PDF ou images) vers un stockage **compatible S3** (Supabase Storage en production, MinIO en local).
 - 📥 **Télécharger** des documents via leur identifiant unique.
 - 💾 **Gérer les métadonnées** des documents dans PostgreSQL (Supabase en production).
-- 🛡️ Valider le format PDF (taille ≤ 20 Mo, signature `%PDF-`) et dédupliquer par **SHA-256**.
+- 🖼️ **Convertir les images en PDF** ; si ce n'est pas possible, les conserver telles quelles dans une archive **ZIP** (sans aucune perte).
+- 🛡️ Valider le type du fichier par son contenu (taille ≤ 20 Mo) et dédupliquer par **SHA-256**.
 - 🔐 Sécuriser les endpoints `/api/**` avec **JWT**.
 
 ## 🚀 Stack technique
@@ -126,7 +127,7 @@ Sur le plan gratuit, le service s'endort après 15 minutes sans requête. Le pre
 ### Authentification
 `POST /auth/login` avec un corps JSON `{"username": "...", "password": "..."}` (identifiants du compte de service). La réponse contient un champ `token` à passer dans l'en-tête `Authorization: Bearer <token>` pour les appels à `/api/**`.
 
-### 1. Upload d'un document PDF
+### 1. Upload d'un document (PDF ou image)
 
 `POST /api/upload` (multipart/form-data, champ `file`)
 
@@ -143,9 +144,21 @@ Réponse :
   "id": "6d9b2f41-5e8d-4b6b-91cc-89e3b5a68b83",
   "name": "doc.pdf",
   "size": 15423,
-  "key": "2025/08/14/uuid.pdf"
+  "key": "2025/08/14/uuid.pdf",
+  "contentType": "application/pdf"
 }
 ```
+
+**Formats acceptés.** Le type est reconnu par le **contenu** du fichier ; le `Content-Type` et l'extension envoyés par le client sont ignorés.
+
+| Fichier reçu | Ce qui est stocké | `contentType` renvoyé | Nom au téléchargement |
+|---|---|---|---|
+| PDF | le PDF tel quel | `application/pdf` | nom d'origine |
+| Image JPEG, PNG, GIF, BMP, TIFF | un **PDF** (une page A4, image sans perte) | `application/pdf` | `nom.pdf` |
+| Image impossible à convertir (WebP, HEIC/HEIF/AVIF, fichier corrompu, plus de 20 mégapixels) | une archive **ZIP** contenant l'image d'origine, octet pour octet | `application/zip` | `nom.webp.zip` |
+| Tout autre format | refusé (`400`) | — | — |
+
+La réponse indique dans `contentType` ce qui a réellement été stocké. La déduplication (SHA-256) porte sur le fichier **reçu**, pas sur le PDF produit : envoyer deux fois la même image renvoie le même document.
 
 ### 2. Télécharger un document
 
@@ -163,7 +176,8 @@ curl -OJ -H "Authorization: Bearer <token>" \
 ## 🔍 Fonctionnement
 
 **Upload**
-- Validation : taille ≤ 20 Mo, signature `%PDF-`.
+- Validation : taille ≤ 20 Mo, type reconnu par signature (PDF ou image).
+- Image : conversion en PDF (PDFBox) ; en cas d'impossibilité, archive ZIP de l'image d'origine.
 - Calcul du SHA-256 ; si le même contenu existe déjà, le document existant est renvoyé.
 - Stockage dans le bucket S3 sous le chemin `YYYY/MM/DD/UUID.pdf`.
 - Métadonnées enregistrées dans PostgreSQL.
@@ -203,6 +217,7 @@ Le détail complet (mesures en place, gestion des secrets, checklist avant mise 
 ## ⚠️ Points d'attention
 
 - **Compte unique** : un seul compte de service existe. Pour gérer plusieurs utilisateurs, il faudra passer à une authentification en base.
+- **Conversion des images** : l'image est placée sans perte sur une page A4 (portrait ou paysage). Les métadonnées d'orientation des photos (EXIF) ne sont pas traitées par l'application. Au-delà de 20 mégapixels, l'image n'est pas décodée (protection mémoire) : elle est archivée telle quelle dans un ZIP.
 - **Schéma de base** : `APP_DDL_AUTO=update` crée et modifie les tables automatiquement, sans migration versionnée. Passer à `validate` en production une fois les tables créées.
 - **Pas de limite d'essais sur `/auth/login`** : voir SECURITY.md, section « Limites connues ».
 

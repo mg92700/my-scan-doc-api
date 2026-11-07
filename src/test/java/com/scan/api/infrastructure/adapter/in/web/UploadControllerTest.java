@@ -70,7 +70,7 @@ class UploadControllerTest {
     @Test
     void upload_avec_jwt() throws Exception {
         UUID id = UUID.randomUUID();
-        when(documentUseCase.savePdf(eq("a.pdf"), eq("application/pdf"), any(InputStream.class), eq((long) PDF.length)))
+        when(documentUseCase.save(eq("a.pdf"), eq("application/pdf"), any(InputStream.class), eq((long) PDF.length)))
                 .thenReturn(Document.builder().id(id).originalFilename("a.pdf").size(PDF.length).s3Key("k.pdf").build());
 
         mvc.perform(multipart("/api/upload")
@@ -83,6 +83,46 @@ class UploadControllerTest {
     }
 
     @Test
+    void upload_image_retourne_le_type_reellement_stocke() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(documentUseCase.save(eq("photo.png"), eq("image/png"), any(InputStream.class), eq(3L)))
+                .thenReturn(Document.builder().id(id).originalFilename("photo.png").size(42)
+                        .contentType("application/pdf").s3Key("2026/01/01/x.pdf").build());
+
+        mvc.perform(multipart("/api/upload")
+                        .file(new MockMultipartFile("file", "photo.png", "image/png", new byte[]{1, 2, 3}))
+                        .header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("photo.png"))
+                .andExpect(jsonPath("$.contentType").value("application/pdf"))
+                .andExpect(jsonPath("$.size").value(42));
+    }
+
+    @Test
+    void upload_format_non_supporte_400() throws Exception {
+        when(documentUseCase.save(any(), any(), any(), anyLong()))
+                .thenThrow(new IllegalArgumentException("Format non supporté"));
+
+        mvc.perform(multipart("/api/upload")
+                        .file(new MockMultipartFile("file", "a.exe", "application/octet-stream", new byte[]{1, 2, 3}))
+                        .header("Authorization", bearer()))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string("Format non supporté"));
+    }
+
+    @Test
+    void download_archive_zip_expose_le_bon_type_et_le_bon_nom() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(documentUseCase.download(id))
+                .thenReturn(new DocumentUseCase.DownloadResult("photo.heic.zip", "application/zip", new byte[]{'P', 'K'}));
+
+        mvc.perform(get("/api/download/{id}", id).header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("application/zip"))
+                .andExpect(header().string("Content-Disposition", containsString("photo.heic.zip")));
+    }
+
+    @Test
     void upload_fichier_vide() throws Exception {
         mvc.perform(multipart("/api/upload")
                         .file(new MockMultipartFile("file", "a.pdf", "application/pdf", new byte[0]))
@@ -92,7 +132,7 @@ class UploadControllerTest {
 
     @Test
     void upload_fichier_invalide_400() throws Exception {
-        when(documentUseCase.savePdf(any(), any(), any(), anyLong()))
+        when(documentUseCase.save(any(), any(), any(), anyLong()))
                 .thenThrow(new IllegalArgumentException("Pas un PDF valide"));
 
         mvc.perform(multipart("/api/upload")

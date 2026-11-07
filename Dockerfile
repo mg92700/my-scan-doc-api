@@ -14,4 +14,6 @@ COPY --from=build /app/target/*.jar app.jar
 USER app
 ENV SPRING_PROFILES_ACTIVE=prod
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+# MaxRAMPercentage : laisse la JVM utiliser 75 % de la mémoire du conteneur (décodage des images)
+# headless : pas d'écran, requis pour manipuler des images dans un conteneur
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-Djava.awt.headless=true", "-jar", "/app/app.jar"]

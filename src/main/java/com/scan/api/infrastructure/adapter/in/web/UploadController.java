@@ -11,6 +11,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -30,18 +31,20 @@ public class UploadController {
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body("Fichier manquant.");
         }
-        Document doc = documentUseCase.savePdf(
+        Document doc = documentUseCase.save(
                 file.getOriginalFilename(),
                 file.getContentType(),
                 file.getInputStream(),
                 file.getSize()
         );
-        return ResponseEntity.ok(Map.of(
-                "id",   doc.getId().toString(),
-                "name", doc.getOriginalFilename(),
-                "size", doc.getSize(),
-                "key",  doc.getS3Key()
-        ));
+        // contentType = type réellement stocké (application/pdf, ou application/zip si l'image n'a pas pu être convertie)
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("id", doc.getId().toString());
+        body.put("name", doc.getOriginalFilename());
+        body.put("size", doc.getSize());
+        body.put("key", doc.getS3Key());
+        body.put("contentType", doc.getContentType());
+        return ResponseEntity.ok(body);
     }
 
     @GetMapping("/download/{id}")

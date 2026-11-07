@@ -21,6 +21,10 @@ import software.amazon.awssdk.services.s3.S3Client;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -30,8 +34,11 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.zip.ZipInputStream;
+import javax.imageio.ImageIO;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -106,6 +113,45 @@ class DocumentFlowIntegrationTest {
     }
 
     @Test
+    void image_png_convertie_en_pdf_puis_telechargee() throws Exception {
+        String token = jeton();
+        String id = envoyer(token, "photo.png", "image/png", unePng());
+
+        mvc.perform(get("/api/download/{id}", id).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("application/pdf"))
+                .andExpect(header().string("Content-Disposition", containsString("photo.pdf")))
+                .andExpect(result -> assertThat(new String(result.getResponse().getContentAsByteArray(), 0, 5,
+                        StandardCharsets.US_ASCII)).isEqualTo("%PDF-"));
+    }
+
+    @Test
+    void image_non_convertible_archivee_en_zip_sans_alteration() throws Exception {
+        String token = jeton();
+        byte[] webp = "RIFF\0\0\0\0WEBPVP8 contenu-quelconque".getBytes(StandardCharsets.ISO_8859_1);
+        String id = envoyer(token, "photo.webp", "image/webp", webp);
+
+        byte[] zip = mvc.perform(get("/api/download/{id}", id).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("application/zip"))
+                .andExpect(header().string("Content-Disposition", containsString("photo.webp.zip")))
+                .andReturn().getResponse().getContentAsByteArray();
+
+        try (var archive = new ZipInputStream(new ByteArrayInputStream(zip))) {
+            assertThat(archive.getNextEntry().getName()).isEqualTo("photo.webp");
+            assertThat(archive.readAllBytes()).isEqualTo(webp);
+        }
+    }
+
+    @Test
+    void format_non_supporte_refuse() throws Exception {
+        mvc.perform(multipart("/api/upload")
+                        .file(new MockMultipartFile("file", "notes.txt", "text/plain", "hello".getBytes()))
+                        .header("Authorization", "Bearer " + jeton()))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void uploads_concurrents_du_meme_fichier_un_seul_document_et_un_seul_objet() throws Exception {
         String token = objectMapper.readTree(mvc.perform(post("/auth/login")
                         .contentType("application/json")
@@ -139,6 +185,29 @@ class DocumentFlowIntegrationTest {
                 Long.class, sha256Hex(pdf))).isEqualTo(1L);
         // les perdants ont supprimé leur objet : un seul nouvel objet dans le bucket
         assertThat(s3.listObjectsV2(b -> b.bucket("scanned-docs")).keyCount()).isEqualTo(objectsBefore + 1);
+    }
+
+    private String jeton() throws Exception {
+        return objectMapper.readTree(mvc.perform(post("/auth/login")
+                        .contentType("application/json")
+                        .content("{\"username\":\"test-user\",\"password\":\"test-password\"}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString()).get("token").asString();
+    }
+
+    private String envoyer(String token, String nom, String type, byte[] octets) throws Exception {
+        String reponse = mvc.perform(multipart("/api/upload")
+                        .file(new MockMultipartFile("file", nom, type, octets))
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(reponse).get("id").asString();
+    }
+
+    private static byte[] unePng() throws Exception {
+        var out = new ByteArrayOutputStream();
+        ImageIO.write(new BufferedImage(20, 10, BufferedImage.TYPE_INT_RGB), "png", out);
+        return out.toByteArray();
     }
 
     private static String sha256Hex(byte[] data) throws Exception {

@@ -14,9 +14,15 @@ import java.util.UUID;
 public interface DocumentUseCase {
 
     /**
-     * Valide, dédoublonne et stocke un PDF.
+     * Valide, dédoublonne et stocke un document reçu.
+     * <ul>
+     *   <li>PDF : stocké tel quel ;</li>
+     *   <li>image : convertie en PDF, ou, si ce n'est pas possible, archivée telle quelle dans un ZIP ;</li>
+     *   <li>tout autre format est refusé ({@link IllegalArgumentException}).</li>
+     * </ul>
+     * Le type est reconnu par le contenu du fichier, jamais par le Content-Type déclaré.
      */
-    Document savePdf(String originalFilename, String contentType,
+    Document save(String originalFilename, String contentType,
                      InputStream in, long size) throws IOException;
 
     /**
