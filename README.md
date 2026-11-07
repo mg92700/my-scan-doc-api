@@ -18,7 +18,7 @@
 - **ORM** : Spring Data JPA (Hibernate)
 - **Tests** : JUnit 5 + MockMvc + Testcontainers (Postgres, MinIO)
 - **Build** : Maven 3.9+
-- **Containerisation** : Docker & Docker Compose
+- **Containerisation** : Docker (image construite depuis le `Dockerfile`)
 
 
 ---
@@ -30,9 +30,9 @@
 git clone https://github.com/ton-user/my-scan-doc-api.git
 cd my-scan-doc-api
 
-2️⃣ Lancer l’infrastructure Docker (MinIO + PostgreSQL)
+2️⃣ Configurer l'environnement
 
-docker-compose up -d
+Copier les variables dans un fichier `.env` à la racine (il n'est pas versionné) : base de données, secret JWT, stockage S3.
 
 📌 Par défaut :
 
