@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Tests + couverture (JaCoCo 90 %)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      # Docker est présent sur ubuntu-latest : Testcontainers (Postgres + MinIO) fonctionne
+      - name: mvn verify
+        run: ./mvnw -B -ntp verify
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rapports-tests
+          path: |
+            target/surefire-reports
+            target/site/jacoco
+          retention-days: 7
+
+  docker:
+    name: Build de l'image Docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: my-scan-doc-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Scan Trivy (CRITICAL/HIGH corrigeables)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: my-scan-doc-api:ci
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
