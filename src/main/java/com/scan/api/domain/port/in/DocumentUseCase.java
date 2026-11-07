@@ -4,6 +4,7 @@ import com.scan.api.domain.model.Document;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -29,6 +30,18 @@ public interface DocumentUseCase {
      * Récupère les bytes d'un document depuis le stockage objet.
      */
     DownloadResult download(UUID id);
+
+    /** Liste les documents actifs ou archivés, du plus récent au plus ancien. */
+    List<Document> list(boolean archived);
+
+    /** Archive un document (idempotent). @throws com.scan.api.domain.model.DocumentNotFoundException si absent */
+    Document archive(UUID id);
+
+    /** Restaure un document archivé (idempotent). @throws com.scan.api.domain.model.DocumentNotFoundException si absent */
+    Document unarchive(UUID id);
+
+    /** Supprime définitivement le document (base puis stockage objet). @throws com.scan.api.domain.model.DocumentNotFoundException si absent */
+    void delete(UUID id);
 
     record DownloadResult(String filename, String contentType, byte[] bytes) {}
 }

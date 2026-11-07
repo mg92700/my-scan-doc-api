@@ -18,6 +18,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -128,6 +129,43 @@ public class DocumentService implements DocumentUseCase {
         byte[] bytes = storage.get(doc.getS3Key());
         return new DownloadResult(
                 downloadName(doc.getOriginalFilename(), doc.getContentType()), doc.getContentType(), bytes);
+    }
+
+    @Override
+    public List<Document> list(boolean archived) {
+        return repository.findAllByArchived(archived);
+    }
+
+    @Override
+    public Document archive(UUID id) {
+        Document doc = find(id);
+        if (doc.getArchivedAt() == null) {
+            doc.setArchivedAt(Instant.now());
+            return repository.save(doc);
+        }
+        return doc;
+    }
+
+    @Override
+    public Document unarchive(UUID id) {
+        Document doc = find(id);
+        if (doc.getArchivedAt() != null) {
+            doc.setArchivedAt(null);
+            return repository.save(doc);
+        }
+        return doc;
+    }
+
+    @Override
+    public void delete(UUID id) {
+        Document doc = find(id);
+        // Base d'abord : un objet orphelin dans le stockage est inoffensif, une ligne sans fichier non.
+        repository.deleteById(id);
+        deleteQuietly(doc.getS3Key());
+    }
+
+    private Document find(UUID id) {
+        return repository.findById(id).orElseThrow(() -> new DocumentNotFoundException(id));
     }
 
     // --- Conversion / archivage ---

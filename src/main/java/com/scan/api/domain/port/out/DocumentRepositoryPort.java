@@ -2,6 +2,7 @@ package com.scan.api.domain.port.out;
 
 import com.scan.api.domain.model.Document;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -22,4 +23,9 @@ public interface DocumentRepositoryPort {
     Optional<Document> findById(UUID id);
 
     Optional<Document> findBySha256(String sha256);
+
+    /** Documents actifs ({@code archived=false}) ou archivés ({@code archived=true}), du plus récent au plus ancien. */
+    List<Document> findAllByArchived(boolean archived);
+
+    void deleteById(UUID id);
 }

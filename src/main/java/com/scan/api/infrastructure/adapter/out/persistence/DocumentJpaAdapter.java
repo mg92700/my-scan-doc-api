@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -45,6 +46,19 @@ public class DocumentJpaAdapter implements DocumentRepositoryPort {
         return jpaRepository.findBySha256(sha256).map(this::toDomain);
     }
 
+    @Override
+    public List<Document> findAllByArchived(boolean archived) {
+        return (archived
+                ? jpaRepository.findByArchivedAtIsNotNullOrderByCreatedAtDesc()
+                : jpaRepository.findByArchivedAtIsNullOrderByCreatedAtDesc())
+                .stream().map(this::toDomain).toList();
+    }
+
+    @Override
+    public void deleteById(UUID id) {
+        jpaRepository.deleteById(id);
+    }
+
     // --- Mappers privés ---
 
     private DocumentJpaEntity toEntity(Document d) {
@@ -56,6 +70,7 @@ public class DocumentJpaAdapter implements DocumentRepositoryPort {
                 .sha256(d.getSha256())
                 .s3Key(d.getS3Key())
                 .createdAt(d.getCreatedAt())
+                .archivedAt(d.getArchivedAt())
                 .build();
     }
 
@@ -68,6 +83,7 @@ public class DocumentJpaAdapter implements DocumentRepositoryPort {
                 .sha256(e.getSha256())
                 .s3Key(e.getS3Key())
                 .createdAt(e.getCreatedAt())
+                .archivedAt(e.getArchivedAt())
                 .build();
     }
 }

@@ -16,6 +16,7 @@ public class Document {
     private String sha256;
     private String s3Key;
     private Instant createdAt;
+    private Instant archivedAt;
 
     public Document() {}
 
@@ -38,6 +39,8 @@ public class Document {
     public String getSha256()         { return sha256; }
     public String getS3Key()          { return s3Key; }
     public Instant getCreatedAt()     { return createdAt; }
+    /** Date d'archivage ; {@code null} tant que le document n'est pas archivé. */
+    public Instant getArchivedAt()    { return archivedAt; }
 
     // --- Setters (pour le builder) ---
     public void setId(UUID id)                          { this.id = id; }
@@ -47,6 +50,7 @@ public class Document {
     public void setSha256(String sha256)                { this.sha256 = sha256; }
     public void setS3Key(String s3Key)                  { this.s3Key = s3Key; }
     public void setCreatedAt(Instant createdAt)         { this.createdAt = createdAt; }
+    public void setArchivedAt(Instant archivedAt)       { this.archivedAt = archivedAt; }
 
     public static Builder builder() { return new Builder(); }
 
@@ -59,6 +63,7 @@ public class Document {
         public Builder sha256(String sha)                { d.sha256 = sha; return this; }
         public Builder s3Key(String key)                 { d.s3Key = key; return this; }
         public Builder createdAt(Instant ts)             { d.createdAt = ts; return this; }
+        public Builder archivedAt(Instant ts)            { d.archivedAt = ts; return this; }
         public Document build()                          { return d; }
     }
 }

@@ -38,4 +38,7 @@ class DocumentJpaEntity {
 
     @Column(nullable = false)
     private Instant createdAt;
+
+    @Column(name = "archived_at")
+    private Instant archivedAt;
 }
