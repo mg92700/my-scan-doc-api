@@ -173,6 +173,22 @@ curl -OJ -H "Authorization: Bearer <token>" \
 
 ---
 
+### 3. Lister, archiver, restaurer, supprimer
+
+Tous ces appels exigent le jeton JWT (`Authorization: Bearer …`).
+
+| Appel | Rôle | Réponse |
+|---|---|---|
+| `GET /api/documents` | Documents actifs, du plus récent au plus ancien | `200` + liste |
+| `GET /api/documents?archived=true` | Documents archivés | `200` + liste |
+| `POST /api/documents/{id}/archive` | Archive un document (sans effet s'il l'est déjà) | `200` + document |
+| `POST /api/documents/{id}/unarchive` | Restaure un document archivé | `200` + document |
+| `DELETE /api/documents/{id}` | Supprime définitivement (base puis fichier) | `204` |
+
+Chaque élément de la liste contient `id`, `name`, `size`, `contentType`, `createdAt` et `archivedAt` (`null` tant que le document n'est pas archivé). La clé de stockage et le SHA-256 ne sont jamais exposés. Un `id` inconnu renvoie `404`. Un document archivé reste téléchargeable.
+
+Après une suppression, le même fichier peut être déposé de nouveau (la déduplication ne le reconnaît plus).
+
 ## 🔍 Fonctionnement
 
 **Upload**

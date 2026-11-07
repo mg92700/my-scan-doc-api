@@ -37,6 +37,7 @@ L'API reçoit des **PDF scannés potentiellement sensibles** (documents personne
 | 17 | **Secret JWT ≥ 256 bits imposé** : l'application ne démarre pas avec un secret trop court | `JwtService` | Empêche un secret faible |
 | 18 | **Profil `prod`** : pas de SQL dans les logs, journaux de sécurité limités aux avertissements, arrêt propre, pool de connexions réduit | `application-prod.yml` | Évite les fuites de données dans les logs et les coupures en plein upload |
 | 19 | **Mises à jour des dépendances suivies** | `.github/dependabot.yml` | Les failles connues (Maven, image Docker) sont signalées chaque semaine par une pull request |
+| 20 | **Suppression ordonnée** : la ligne en base est supprimée avant le fichier du stockage ; un échec du stockage est journalisé et ne casse pas la suppression | `DocumentService.delete` | Un fichier orphelin est inoffensif, une ligne qui pointe vers un fichier absent ne l'est pas. Les réponses de liste n'exposent ni clé de stockage ni SHA-256 |
 
 ## 3. Gestion des secrets
 
