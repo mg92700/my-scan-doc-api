@@ -16,4 +16,5 @@ ENV SPRING_PROFILES_ACTIVE=prod
 EXPOSE 8080
 # MaxRAMPercentage : laisse la JVM utiliser 75 % de la mémoire du conteneur (décodage des images)
 # headless : pas d'écran, requis pour manipuler des images dans un conteneur
-ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-Djava.awt.headless=true", "-jar", "/app/app.jar"]
+# Démarrage plus rapide sur le CPU réduit de l'offre gratuite : compilateur léger + GC série
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-XX:TieredStopAtLevel=1", "-XX:+UseSerialGC", "-Djava.awt.headless=true", "-jar", "/app/app.jar"]
