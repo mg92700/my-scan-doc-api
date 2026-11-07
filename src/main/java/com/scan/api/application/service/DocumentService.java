@@ -4,6 +4,7 @@ import com.scan.api.domain.model.ConversionException;
 import com.scan.api.domain.model.Document;
 import com.scan.api.domain.model.DocumentAlreadyExistsException;
 import com.scan.api.domain.model.DocumentNotFoundException;
+import com.scan.api.domain.model.DocumentPage;
 import com.scan.api.domain.port.in.DocumentUseCase;
 import com.scan.api.domain.port.out.DocumentRepositoryPort;
 import com.scan.api.domain.port.out.ImageToPdfPort;
@@ -18,7 +19,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HexFormat;
-import java.util.List;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -49,6 +49,8 @@ public class DocumentService implements DocumentUseCase {
     private static final System.Logger LOG = System.getLogger(DocumentService.class.getName());
 
     static final int MAX_SIZE = 20 * 1024 * 1024; // 20 MB
+    static final int MAX_PAGE_SIZE = 100;
+    static final int MAX_QUERY_LENGTH = 100;
     static final int MAX_FILENAME_LENGTH = 255;
     static final String DEFAULT_FILENAME = "document.pdf";
     static final String PDF_CONTENT_TYPE = "application/pdf";
@@ -132,8 +134,18 @@ public class DocumentService implements DocumentUseCase {
     }
 
     @Override
-    public List<Document> list(boolean archived) {
-        return repository.findAllByArchived(archived);
+    public DocumentPage list(boolean archived, String query, int offset, int limit) {
+        if (offset < 0) {
+            throw new IllegalArgumentException("offset doit être 0 ou plus");
+        }
+        if (limit < 1 || limit > MAX_PAGE_SIZE) {
+            throw new IllegalArgumentException("limit doit être compris entre 1 et " + MAX_PAGE_SIZE);
+        }
+        String text = query == null ? "" : query.strip();
+        if (text.length() > MAX_QUERY_LENGTH) {
+            throw new IllegalArgumentException("La recherche est limitée à " + MAX_QUERY_LENGTH + " caractères");
+        }
+        return repository.search(archived, text, offset, limit);
     }
 
     @Override

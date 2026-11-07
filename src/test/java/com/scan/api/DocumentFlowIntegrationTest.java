@@ -187,6 +187,62 @@ class DocumentFlowIntegrationTest {
         assertThat(s3.listObjectsV2(b -> b.bucket("scanned-docs")).keyCount()).isEqualTo(objectsBefore + 1);
     }
 
+    @Test
+    void liste_paginee_recherche_et_archivage_sur_une_vraie_base() throws Exception {
+        String token = jeton();
+        String alpha = envoyer(token, "zzq-Alpha.pdf", "application/pdf", unPdf("alpha"));
+        envoyer(token, "zzq-beta.pdf", "application/pdf", unPdf("beta"));
+        envoyer(token, "zzq-100%.pdf", "application/pdf", unPdf("gamma"));
+
+        // recherche insensible à la casse : les trois documents
+        mvc.perform(get("/api/documents").param("q", "ZZQ").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(3))
+                .andExpect(jsonPath("$.items.length()").value(3));
+
+        // pagination par décalage : total inchangé, une seule ligne renvoyée, pas de chevauchement
+        String page1 = mvc.perform(get("/api/documents").param("q", "zzq").param("offset", "0").param("limit", "2")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.total").value(3))
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andReturn().getResponse().getContentAsString();
+        String page2 = mvc.perform(get("/api/documents").param("q", "zzq").param("offset", "2").param("limit", "2")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.total").value(3))
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andReturn().getResponse().getContentAsString();
+        Set<String> ids = new HashSet<>();
+        objectMapper.readTree(page1).get("items").forEach(n -> ids.add(n.get("id").asString()));
+        objectMapper.readTree(page2).get("items").forEach(n -> ids.add(n.get("id").asString()));
+        assertThat(ids).hasSize(3);
+
+        // les jokers saisis sont littéraux : « zzq-% » ne correspond à aucun nom, « 100% » à un seul
+        mvc.perform(get("/api/documents").param("q", "zzq-%").header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.total").value(0));
+        mvc.perform(get("/api/documents").param("q", "100%").header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.total").value(1));
+
+        // archivage : le document passe de la liste active à la liste des archives
+        mvc.perform(post("/api/documents/{id}/archive", alpha).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/documents").param("q", "zzq").header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.total").value(2));
+        mvc.perform(get("/api/documents").param("q", "zzq").param("archived", "true")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.items[0].id").value(alpha));
+
+        // paramètres invalides
+        mvc.perform(get("/api/documents").param("limit", "101").header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/documents").param("offset", "-1").header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest());
+    }
+
+    private static byte[] unPdf(String contenu) {
+        return ("%PDF-1.4\n% " + contenu + " " + Instant.now() + "\n%%EOF\n").getBytes();
+    }
+
     private String jeton() throws Exception {
         return objectMapper.readTree(mvc.perform(post("/auth/login")
                         .contentType("application/json")

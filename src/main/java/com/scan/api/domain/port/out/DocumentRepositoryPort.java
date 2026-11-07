@@ -1,8 +1,8 @@
 package com.scan.api.domain.port.out;
 
 import com.scan.api.domain.model.Document;
+import com.scan.api.domain.model.DocumentPage;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,8 +24,14 @@ public interface DocumentRepositoryPort {
 
     Optional<Document> findBySha256(String sha256);
 
-    /** Documents actifs ({@code archived=false}) ou archivés ({@code archived=true}), du plus récent au plus ancien. */
-    List<Document> findAllByArchived(boolean archived);
+    /**
+     * Cherche les documents actifs ({@code archived=false}) ou archivés ({@code archived=true}) dont le nom
+     * contient {@code query} (sans tenir compte de la casse ; vide = tous), du plus récent au plus ancien.
+     *
+     * @param offset rang du premier résultat (0 = début)
+     * @param limit  nombre maximal de résultats
+     */
+    DocumentPage search(boolean archived, String query, int offset, int limit);
 
     void deleteById(UUID id);
 }

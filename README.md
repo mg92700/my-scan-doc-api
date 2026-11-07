@@ -173,19 +173,29 @@ curl -OJ -H "Authorization: Bearer <token>" \
 
 ---
 
-### 3. Lister, archiver, restaurer, supprimer
+### 3. Lister, rechercher, archiver, restaurer, supprimer
 
 Tous ces appels exigent le jeton JWT (`Authorization: Bearer …`).
 
 | Appel | Rôle | Réponse |
 |---|---|---|
-| `GET /api/documents` | Documents actifs, du plus récent au plus ancien | `200` + liste |
-| `GET /api/documents?archived=true` | Documents archivés | `200` + liste |
+| `GET /api/documents` | Page de documents actifs, du plus récent au plus ancien | `200` + page |
+| `GET /api/documents?archived=true` | Page de documents archivés | `200` + page |
 | `POST /api/documents/{id}/archive` | Archive un document (sans effet s'il l'est déjà) | `200` + document |
 | `POST /api/documents/{id}/unarchive` | Restaure un document archivé | `200` + document |
 | `DELETE /api/documents/{id}` | Supprime définitivement (base puis fichier) | `204` |
 
-Chaque élément de la liste contient `id`, `name`, `size`, `contentType`, `createdAt` et `archivedAt` (`null` tant que le document n'est pas archivé). La clé de stockage et le SHA-256 ne sont jamais exposés. Un `id` inconnu renvoie `404`. Un document archivé reste téléchargeable.
+**Pagination et recherche** (paramètres facultatifs de `GET /api/documents`) :
+
+| Paramètre | Rôle | Défaut | Limites |
+|---|---|---|---|
+| `q` | Texte cherché dans le nom, sans tenir compte de la casse | vide (tout) | 100 caractères |
+| `offset` | Rang du premier résultat | `0` | 0 ou plus |
+| `limit` | Nombre de résultats | `20` | 1 à 100 |
+
+La réponse est `{ "items": [...], "total": 42, "offset": 20, "limit": 10 }` : `total` est le nombre de correspondances, pour calculer le nombre de pages. Hors limites : `400`. Les caractères `%` et `_` saisis sont cherchés tels quels (ils ne servent pas de jokers).
+
+Chaque élément de `items` contient `id`, `name`, `size`, `contentType`, `createdAt` et `archivedAt` (`null` tant que le document n'est pas archivé). La clé de stockage et le SHA-256 ne sont jamais exposés. Un `id` inconnu renvoie `404`. Un document archivé reste téléchargeable.
 
 Après une suppression, le même fichier peut être déposé de nouveau (la déduplication ne le reconnaît plus).
 
@@ -243,3 +253,17 @@ Le détail complet (mesures en place, gestion des secrets, checklist avant mise 
 
 Mouhsin Ghoraf – Développeur Java / Angular
 Contact : ghoraf.mouhsin@gmail.com
+
+### Index de recherche (facultatif, utile au-delà de quelques milliers de documents)
+
+La recherche « contient » (`%texte%`) ne peut pas utiliser un index classique. Pour la garder rapide sur beaucoup de documents, créer une fois dans Supabase (*SQL Editor*) :
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX IF NOT EXISTS idx_documents_filename_trgm
+    ON public.documents USING gin (lower(original_filename) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_documents_created
+    ON public.documents (created_at DESC, id DESC);
+```
+
+Pour un usage personnel (quelques centaines de documents), ce n'est pas nécessaire.

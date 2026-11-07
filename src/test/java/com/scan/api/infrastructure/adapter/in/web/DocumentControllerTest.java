@@ -2,6 +2,7 @@ package com.scan.api.infrastructure.adapter.in.web;
 
 import com.scan.api.domain.model.Document;
 import com.scan.api.domain.model.DocumentNotFoundException;
+import com.scan.api.domain.model.DocumentPage;
 import com.scan.api.domain.port.in.DocumentUseCase;
 import com.scan.api.infrastructure.security.JwtService;
 import com.scan.api.infrastructure.security.SecurityConfig;
@@ -56,26 +57,43 @@ class DocumentControllerTest {
     @Test
     void liste_les_documents_actifs_sans_exposer_cle_ni_sha() throws Exception {
         UUID id = UUID.randomUUID();
-        when(documentUseCase.list(false)).thenReturn(List.of(doc(id, null)));
+        when(documentUseCase.list(false, "", 0, 20)).thenReturn(new DocumentPage(List.of(doc(id, null)), 1));
 
         mvc.perform(get("/api/documents").header("Authorization", bearer()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(id.toString()))
-                .andExpect(jsonPath("$[0].name").value("a.pdf"))
-                .andExpect(jsonPath("$[0].size").value(3))
-                .andExpect(jsonPath("$[0].archivedAt").doesNotExist())
-                .andExpect(jsonPath("$[0].s3Key").doesNotExist())
-                .andExpect(jsonPath("$[0].sha256").doesNotExist());
+                .andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.offset").value(0))
+                .andExpect(jsonPath("$.limit").value(20))
+                .andExpect(jsonPath("$.items[0].id").value(id.toString()))
+                .andExpect(jsonPath("$.items[0].name").value("a.pdf"))
+                .andExpect(jsonPath("$.items[0].size").value(3))
+                .andExpect(jsonPath("$.items[0].archivedAt").doesNotExist())
+                .andExpect(jsonPath("$.items[0].s3Key").doesNotExist())
+                .andExpect(jsonPath("$.items[0].sha256").doesNotExist());
     }
 
     @Test
-    void liste_les_documents_archives() throws Exception {
+    void liste_transmet_recherche_decalage_et_taille() throws Exception {
         UUID id = UUID.randomUUID();
-        when(documentUseCase.list(true)).thenReturn(List.of(doc(id, T0)));
+        when(documentUseCase.list(true, "fact", 30, 10)).thenReturn(new DocumentPage(List.of(doc(id, T0)), 41));
 
-        mvc.perform(get("/api/documents").param("archived", "true").header("Authorization", bearer()))
+        mvc.perform(get("/api/documents").param("archived", "true").param("q", "fact")
+                        .param("offset", "30").param("limit", "10").header("Authorization", bearer()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].archivedAt").isNotEmpty());
+                .andExpect(jsonPath("$.total").value(41))
+                .andExpect(jsonPath("$.offset").value(30))
+                .andExpect(jsonPath("$.limit").value(10))
+                .andExpect(jsonPath("$.items[0].archivedAt").isNotEmpty());
+    }
+
+    @Test
+    void liste_parametres_invalides_retourne_400() throws Exception {
+        when(documentUseCase.list(false, "", 0, 500)).thenThrow(new IllegalArgumentException("limit hors limites"));
+
+        mvc.perform(get("/api/documents").param("limit", "500").header("Authorization", bearer()))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/documents").param("offset", "abc").header("Authorization", bearer()))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

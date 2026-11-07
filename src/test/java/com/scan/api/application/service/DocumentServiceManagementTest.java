@@ -2,6 +2,7 @@ package com.scan.api.application.service;
 
 import com.scan.api.domain.model.Document;
 import com.scan.api.domain.model.DocumentNotFoundException;
+import com.scan.api.domain.model.DocumentPage;
 import com.scan.api.domain.model.StorageException;
 import com.scan.api.domain.port.out.DocumentRepositoryPort;
 import com.scan.api.domain.port.out.ImageToPdfPort;
@@ -33,11 +34,39 @@ class DocumentServiceManagementTest {
     }
 
     @Test
-    void list_delegue_au_repository() {
-        List<Document> actifs = List.of(doc(UUID.randomUUID(), null));
-        when(repository.findAllByArchived(false)).thenReturn(actifs);
+    void list_delegue_au_repository_avec_le_texte_nettoye() {
+        DocumentPage page = new DocumentPage(List.of(doc(UUID.randomUUID(), null)), 1);
+        when(repository.search(false, "facture", 20, 10)).thenReturn(page);
 
-        assertThat(service.list(false)).isSameAs(actifs);
+        assertThat(service.list(false, "  facture  ", 20, 10)).isSameAs(page);
+    }
+
+    @Test
+    void list_sans_texte_cherche_tout() {
+        DocumentPage page = new DocumentPage(List.of(), 0);
+        when(repository.search(true, "", 0, 20)).thenReturn(page);
+
+        assertThat(service.list(true, null, 0, 20)).isSameAs(page);
+    }
+
+    @Test
+    void list_refuse_les_parametres_hors_limites() {
+        assertThatThrownBy(() -> service.list(false, "", -1, 10)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.list(false, "", 0, 0)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.list(false, "", 0, DocumentService.MAX_PAGE_SIZE + 1))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.list(false, "x".repeat(DocumentService.MAX_QUERY_LENGTH + 1), 0, 10))
+                .isInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(repository);
+    }
+
+    @Test
+    void list_accepte_les_bornes() {
+        when(repository.search(false, "x".repeat(DocumentService.MAX_QUERY_LENGTH), 0, DocumentService.MAX_PAGE_SIZE))
+                .thenReturn(new DocumentPage(List.of(), 0));
+
+        assertThat(service.list(false, "x".repeat(DocumentService.MAX_QUERY_LENGTH), 0, DocumentService.MAX_PAGE_SIZE).total())
+                .isZero();
     }
 
     @Test

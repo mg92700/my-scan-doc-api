@@ -1,6 +1,7 @@
 package com.scan.api.infrastructure.adapter.out.persistence;
 
 import com.scan.api.domain.model.Document;
+import com.scan.api.domain.model.DocumentPage;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -25,24 +26,32 @@ class DocumentJpaAdapterManagementTest {
     }
 
     @Test
-    void findAllByArchived_false_lit_les_actifs() {
+    void search_transmet_le_motif_l_etat_et_la_page() {
         UUID id = UUID.randomUUID();
-        when(repo.findByArchivedAtIsNullOrderByCreatedAtDesc()).thenReturn(List.of(entite(id, null)));
+        when(repo.search(false, "%facture%", 20, 10))
+                .thenReturn(new DocumentSearchFragment.SearchResult(List.of(entite(id, null)), 31));
 
-        List<Document> res = adapter.findAllByArchived(false);
+        DocumentPage res = adapter.search(false, "Facture", 20, 10);
 
-        assertThat(res).hasSize(1);
-        assertThat(res.get(0).getId()).isEqualTo(id);
-        assertThat(res.get(0).getArchivedAt()).isNull();
-        verify(repo, never()).findByArchivedAtIsNotNullOrderByCreatedAtDesc();
+        assertThat(res.total()).isEqualTo(31);
+        assertThat(res.items()).hasSize(1);
+        assertThat(res.items().get(0).getId()).isEqualTo(id);
+        assertThat(res.items().get(0).getArchivedAt()).isNull();
     }
 
     @Test
-    void findAllByArchived_true_lit_les_archives() {
-        when(repo.findByArchivedAtIsNotNullOrderByCreatedAtDesc())
-                .thenReturn(List.of(entite(UUID.randomUUID(), T0)));
+    void search_des_archives_conserve_la_date() {
+        when(repo.search(true, "%%", 0, 20))
+                .thenReturn(new DocumentSearchFragment.SearchResult(List.of(entite(UUID.randomUUID(), T0)), 1));
 
-        assertThat(adapter.findAllByArchived(true).get(0).getArchivedAt()).isEqualTo(T0);
+        assertThat(adapter.search(true, "", 0, 20).items().get(0).getArchivedAt()).isEqualTo(T0);
+    }
+
+    @Test
+    void le_motif_neutralise_les_jokers_et_ignore_la_casse() {
+        assertThat(DocumentJpaAdapter.likePattern("")).isEqualTo("%%");
+        assertThat(DocumentJpaAdapter.likePattern("ReÇu")).isEqualTo("%reçu%");
+        assertThat(DocumentJpaAdapter.likePattern("100%_ok!")).isEqualTo("%100!%!_ok!!%");
     }
 
     @Test

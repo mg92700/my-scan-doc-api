@@ -2,12 +2,13 @@ package com.scan.api.infrastructure.adapter.out.persistence;
 
 import com.scan.api.domain.model.Document;
 import com.scan.api.domain.model.DocumentAlreadyExistsException;
+import com.scan.api.domain.model.DocumentPage;
 import com.scan.api.domain.port.out.DocumentRepositoryPort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -47,11 +48,19 @@ public class DocumentJpaAdapter implements DocumentRepositoryPort {
     }
 
     @Override
-    public List<Document> findAllByArchived(boolean archived) {
-        return (archived
-                ? jpaRepository.findByArchivedAtIsNotNullOrderByCreatedAtDesc()
-                : jpaRepository.findByArchivedAtIsNullOrderByCreatedAtDesc())
-                .stream().map(this::toDomain).toList();
+    public DocumentPage search(boolean archived, String query, int offset, int limit) {
+        var result = jpaRepository.search(archived, likePattern(query), offset, limit);
+        return new DocumentPage(result.items().stream().map(this::toDomain).toList(), result.total());
+    }
+
+    /**
+     * Motif « contient » insensible à la casse. Les caractères joker du texte saisi ({@code %}, {@code _})
+     * sont neutralisés avec {@code !} : taper « 100% » cherche bien « 100% » et pas « tout ».
+     */
+    static String likePattern(String query) {
+        String escaped = query.toLowerCase(Locale.ROOT)
+                .replace("!", "!!").replace("%", "!%").replace("_", "!_");
+        return "%" + escaped + "%";
     }
 
     @Override

@@ -1,10 +1,10 @@
 package com.scan.api.domain.port.in;
 
 import com.scan.api.domain.model.Document;
+import com.scan.api.domain.model.DocumentPage;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.List;
 import java.util.UUID;
 
 /**
@@ -31,8 +31,15 @@ public interface DocumentUseCase {
      */
     DownloadResult download(UUID id);
 
-    /** Liste les documents actifs ou archivés, du plus récent au plus ancien. */
-    List<Document> list(boolean archived);
+    /**
+     * Liste une page de documents actifs ou archivés, filtrés par nom, du plus récent au plus ancien.
+     *
+     * @param query  texte cherché dans le nom (vide = tous), 100 caractères maximum
+     * @param offset rang du premier résultat, 0 ou plus
+     * @param limit  nombre de résultats, de 1 à 100
+     * @throws IllegalArgumentException si un paramètre est hors limites
+     */
+    DocumentPage list(boolean archived, String query, int offset, int limit);
 
     /** Archive un document (idempotent). @throws com.scan.api.domain.model.DocumentNotFoundException si absent */
     Document archive(UUID id);

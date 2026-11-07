@@ -1,6 +1,7 @@
 package com.scan.api.infrastructure.adapter.in.web;
 
 import com.scan.api.domain.model.Document;
+import com.scan.api.domain.model.DocumentPage;
 import com.scan.api.domain.port.in.DocumentUseCase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -30,9 +31,16 @@ public class DocumentController {
         }
     }
 
+    /** Page de résultats : les éléments, le total et les paramètres appliqués. */
+    public record PageView(List<DocumentView> items, long total, int offset, int limit) {}
+
     @GetMapping
-    public List<DocumentView> list(@RequestParam(defaultValue = "false") boolean archived) {
-        return documentUseCase.list(archived).stream().map(DocumentView::from).toList();
+    public PageView list(@RequestParam(defaultValue = "false") boolean archived,
+                         @RequestParam(defaultValue = "") String q,
+                         @RequestParam(defaultValue = "0") int offset,
+                         @RequestParam(defaultValue = "20") int limit) {
+        DocumentPage page = documentUseCase.list(archived, q, offset, limit);
+        return new PageView(page.items().stream().map(DocumentView::from).toList(), page.total(), offset, limit);
     }
 
     @PostMapping("/{id}/archive")
