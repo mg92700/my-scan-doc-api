@@ -1,0 +1,8 @@
+.git
+.idea
+target
+pg-data
+minio-data
+kafka-data
+*.zip
+.env

@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: my-scan-doc-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+      - key: APP_JWT_SECRET
+        generateValue: true
+      - key: APP_S3_ENDPOINT
+        sync: false
+      - key: APP_S3_ACCESS_KEY
+        sync: false
+      - key: APP_S3_SECRET_KEY
+        sync: false
+      - key: APP_S3_BUCKET
+        value: scanned-docs
