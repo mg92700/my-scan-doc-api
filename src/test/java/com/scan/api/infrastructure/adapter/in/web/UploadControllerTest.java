@@ -12,6 +12,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -28,6 +29,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(controllers = {UploadController.class, AuthController.class})
 @Import({SecurityConfig.class, JwtService.class})
+@TestPropertySource(properties = {
+        "app.auth.username=test-user",
+        "app.auth.password-hash=$2b$10$kkze//w20clWp.X1RmThBu2mhsiOI8mdAAn1PKYxPpIqdO52vBjOu",
+        "app.jwt.secret=test-secret-test-secret-test-secret-test-secret-0123456789"
+})
 class UploadControllerTest {
 
     private static final byte[] PDF = "%PDF-1.4\n%%EOF\n".getBytes();
@@ -37,13 +43,13 @@ class UploadControllerTest {
     @MockitoBean DocumentUseCase documentUseCase;
 
     private String bearer() {
-        return "Bearer " + jwtService.generate("admin", Map.of("roles", List.of("ROLE_ADMIN")));
+        return "Bearer " + jwtService.generate("test-user", Map.of("roles", List.of("ROLE_ADMIN")));
     }
 
     @Test
     void login_retourne_un_token_valide() throws Exception {
         mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"username\":\"admin\",\"password\":\"admin123\"}"))
+                        .content("{\"username\":\"test-user\",\"password\":\"test-password\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").isNotEmpty());
     }
@@ -51,7 +57,7 @@ class UploadControllerTest {
     @Test
     void login_mauvais_mot_de_passe() throws Exception {
         mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"username\":\"admin\",\"password\":\"nope\"}"))
+                        .content("{\"username\":\"test-user\",\"password\":\"nope\"}"))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -152,6 +158,19 @@ class UploadControllerTest {
     @Test
     void jwt_invalide_refuse() throws Exception {
         mvc.perform(get("/api/download/{id}", UUID.randomUUID()).header("Authorization", "Bearer abc.def.ghi"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void route_inconnue_refusee_par_defaut() throws Exception {
+        mvc.perform(get("/inconnue")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/inconnue").header("Authorization", bearer())).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void http_basic_desactive() throws Exception {
+        String basic = java.util.Base64.getEncoder().encodeToString("test-user:test-password".getBytes());
+        mvc.perform(get("/api/download/{id}", UUID.randomUUID()).header("Authorization", "Basic " + basic))
                 .andExpect(status().isUnauthorized());
     }
 }

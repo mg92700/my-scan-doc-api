@@ -60,6 +60,9 @@ class DocumentFlowIntegrationTest {
         r.add("app.s3.secret-key", minio::getPassword);
         r.add("app.s3.bucket", () -> "scanned-docs");
         r.add("spring.jpa.hibernate.ddl-auto", () -> "create");
+        r.add("app.auth.username", () -> "test-user");
+        r.add("app.auth.password-hash", () -> "$2b$10$kkze//w20clWp.X1RmThBu2mhsiOI8mdAAn1PKYxPpIqdO52vBjOu");
+        r.add("app.jwt.secret", () -> "test-secret-test-secret-test-secret-test-secret-0123456789");
     }
 
     @Autowired MockMvc mvc;
@@ -76,7 +79,7 @@ class DocumentFlowIntegrationTest {
     void upload_puis_download() throws Exception {
         String token = objectMapper.readTree(mvc.perform(post("/auth/login")
                         .contentType("application/json")
-                        .content("{\"username\":\"admin\",\"password\":\"admin123\"}"))
+                        .content("{\"username\":\"test-user\",\"password\":\"test-password\"}"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString()).get("token").asString();
 
@@ -106,7 +109,7 @@ class DocumentFlowIntegrationTest {
     void uploads_concurrents_du_meme_fichier_un_seul_document_et_un_seul_objet() throws Exception {
         String token = objectMapper.readTree(mvc.perform(post("/auth/login")
                         .contentType("application/json")
-                        .content("{\"username\":\"admin\",\"password\":\"admin123\"}"))
+                        .content("{\"username\":\"test-user\",\"password\":\"test-password\"}"))
                 .andReturn().getResponse().getContentAsString()).get("token").asString();
 
         byte[] pdf = ("%PDF-1.4\n% concurrent " + System.nanoTime() + "\n%%EOF\n").getBytes();

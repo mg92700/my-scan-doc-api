@@ -1,20 +1,28 @@
-# Profil de production (Render). Toutes les valeurs sensibles viennent des variables d'environnement.
-server:
-  port: ${PORT:8080}
-
+# =====================================================================
+# Profil "prod" (SPRING_PROFILES_ACTIVE=prod, activé par le Dockerfile et render.yaml).
+# Il s'ajoute à application.yml : seules les différences propres à la production sont ici.
+# Les valeurs sensibles (base, S3, JWT, compte de service) restent lues depuis
+# l'environnement dans application.yml. Voir README.md et SECURITY.md.
+# =====================================================================
 spring:
+  main:
+    banner-mode: "off"
   datasource:
-    url: ${SPRING_DATASOURCE_URL}
-    username: ${SPRING_DATASOURCE_USERNAME}
-    password: ${SPRING_DATASOURCE_PASSWORD}
+    hikari:
+      # Peu de connexions : le pooler Supabase (plan gratuit) limite le nombre de clients
+      maximum-pool-size: 5
+      minimum-idle: 1
+  jpa:
+    # Jamais de requêtes SQL dans les logs (elles peuvent contenir des données)
+    show-sql: false
 
-app:
-  jwt:
-    secret: ${APP_JWT_SECRET}
-  s3:
-    endpoint: ${APP_S3_ENDPOINT}
-    region: ${APP_S3_REGION:eu-west-2}
-    bucket: ${APP_S3_BUCKET:scanned-docs}
-    access-key: ${APP_S3_ACCESS_KEY}
-    secret-key: ${APP_S3_SECRET_KEY}
-    path-style-access: true
+server:
+  # Arrêt propre : les requêtes en cours (uploads) se terminent avant l'arrêt du conteneur
+  shutdown: graceful
+
+logging:
+  level:
+    root: INFO
+    # Pas de détails d'authentification dans les logs
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN

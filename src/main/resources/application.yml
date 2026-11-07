@@ -1,8 +1,11 @@
-# Toutes les valeurs sont lues depuis le fichier .env à la racine du projet
-# (ou depuis les variables d'environnement, qui sont prioritaires).
-# Le fichier .env est optionnel : sans lui, seules les variables d'environnement sont utilisées.
+# =====================================================================
+# Configuration de l'application. Voir README.md (variables) et SECURITY.md (sécurité).
+# Aucune valeur sensible n'est écrite ici : elles viennent de .env ou de l'environnement
+# (les variables d'environnement sont prioritaires sur .env). Modèle : .env.example
+# =====================================================================
 spring:
   config:
+    # .env est optionnel : sans lui, seules les variables d'environnement sont utilisées.
     import: optional:file:./.env[.properties]
 
   application:
@@ -15,22 +18,52 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: update
+      # update = crée/modifie les tables au démarrage.
+      # En production, passer à "validate" (APP_DDL_AUTO=validate) une fois les tables créées :
+      # l'application ne modifie alors plus jamais le schéma.
+      ddl-auto: ${APP_DDL_AUTO:update}
     properties:
       hibernate.jdbc.time_zone: UTC
 
   servlet:
     multipart:
+      # Taille maximale d'un upload (la validation métier refuse aussi > 20 Mo)
       max-file-size: 20MB
       max-request-size: 20MB
 
 server:
-  port: ${PORT:8081}
+  port: ${PORT:8080}
+  # Render termine le HTTPS en amont : Spring doit lire X-Forwarded-* pour savoir que
+  # la requête d'origine est en HTTPS (HSTS, redirections). Ne pas exposer l'application
+  # directement à Internet sans proxy.
+  forward-headers-strategy: framework
+  error:
+    # Aucun détail interne dans les réponses d'erreur (le détail va dans les logs)
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+    include-exception: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Seul /actuator/health est exposé, sans détails
+        include: health
+  endpoint:
+    health:
+      show-details: never
 
 app:
+  auth:
+    # Compte de service unique. Le mot de passe n'est jamais stocké en clair : hash BCrypt.
+    username: ${APP_AUTH_USERNAME}
+    password-hash: ${APP_AUTH_PASSWORD_HASH}
   jwt:
+    # Secret de signature : 32 caractères minimum (256 bits), sinon l'application ne démarre pas.
     secret: ${APP_JWT_SECRET}
-    expiration-minutes: 120
+    # Durée de validité d'un jeton. Courte : il n'y a pas de révocation.
+    expiration-minutes: ${APP_JWT_EXPIRATION_MINUTES:30}
   s3:
     endpoint: ${APP_S3_ENDPOINT}
     region: ${APP_S3_REGION:eu-west-2}

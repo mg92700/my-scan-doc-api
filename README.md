@@ -25,14 +25,18 @@
 
 Toute la configuration est lue depuis un fichier **`.env`** à la racine du projet, ou depuis les variables d'environnement (qui sont prioritaires). Le fichier `.env` n'est **jamais versionné** (il est exclu par `.gitignore` et `.dockerignore`) car il contient des secrets.
 
-Crée un fichier `.env` avec les variables suivantes :
+Copie `.env.example` en `.env` puis remplace les valeurs. Variables :
 
 | Variable | Rôle |
 |---|---|
 | `SPRING_DATASOURCE_URL` | URL JDBC PostgreSQL, par exemple `jdbc:postgresql://<host>:5432/postgres?sslmode=require` |
 | `SPRING_DATASOURCE_USERNAME` | Utilisateur PostgreSQL |
 | `SPRING_DATASOURCE_PASSWORD` | Mot de passe PostgreSQL |
+| `APP_AUTH_USERNAME` | Nom du compte de service qui se connecte à l'API |
+| `APP_AUTH_PASSWORD_HASH` | Hash **BCrypt** du mot de passe du compte de service (jamais le mot de passe en clair) |
 | `APP_JWT_SECRET` | Secret de signature JWT, 256 bits minimum (32 caractères ou plus) |
+| `APP_JWT_EXPIRATION_MINUTES` | Durée de validité d'un jeton (optionnel, `30` par défaut) |
+| `APP_DDL_AUTO` | `update` (crée les tables) ou `validate` (production, une fois les tables créées). `update` par défaut |
 | `APP_S3_ENDPOINT` | Endpoint S3 (voir ci-dessous) |
 | `APP_S3_REGION` | Région S3 (optionnel, `eu-west-2` par défaut) |
 | `APP_S3_BUCKET` | Nom du bucket, par exemple `scanned-docs` |
@@ -46,6 +50,8 @@ Exemple de structure (les valeurs sont à remplacer) :
 SPRING_DATASOURCE_URL=jdbc:postgresql://<host>:5432/postgres?sslmode=require
 SPRING_DATASOURCE_USERNAME=<utilisateur>
 SPRING_DATASOURCE_PASSWORD=<mot-de-passe>
+APP_AUTH_USERNAME=<compte-de-service>
+APP_AUTH_PASSWORD_HASH=<hash-bcrypt>
 APP_JWT_SECRET=<secret-de-64-caractères-minimum>
 APP_S3_ENDPOINT=https://<project-ref>.storage.supabase.co/storage/v1/s3
 APP_S3_REGION=eu-west-2
@@ -53,6 +59,15 @@ APP_S3_BUCKET=scanned-docs
 APP_S3_ACCESS_KEY=<access-key-id>
 APP_S3_SECRET_KEY=<secret-access-key>
 ```
+
+### Compte de service
+L'API n'a qu'un compte, défini par `APP_AUTH_USERNAME` et `APP_AUTH_PASSWORD_HASH`. Pour générer le hash d'un mot de passe :
+
+```
+python -c "import bcrypt,getpass; print(bcrypt.hashpw(getpass.getpass().encode(), bcrypt.gensalt(12)).decode())"
+```
+
+(nécessite `pip install bcrypt`). Colle le résultat dans `.env`. L'application refuse de démarrer si le hash n'est pas au format BCrypt.
 
 ### Supabase (production)
 - **Base** : dans le tableau de bord, **Connect → Session pooler**. Utilise le host du pooler et le nom d'utilisateur `postgres.<project-ref>`. La connexion directe ne fonctionne pas depuis Render.
@@ -109,7 +124,7 @@ Sur le plan gratuit, le service s'endort après 15 minutes sans requête. Le pre
 ## 📌 Endpoints REST
 
 ### Authentification
-`POST /auth/login` avec un corps JSON `{"username": "...", "password": "..."}`. La réponse contient un champ `token` à passer dans l'en-tête `Authorization: Bearer <token>` pour les appels à `/api/**`.
+`POST /auth/login` avec un corps JSON `{"username": "...", "password": "..."}` (identifiants du compte de service). La réponse contient un champ `token` à passer dans l'en-tête `Authorization: Bearer <token>` pour les appels à `/api/**`.
 
 ### 1. Upload d'un document PDF
 
@@ -166,7 +181,7 @@ curl -OJ -H "Authorization: Bearer <token>" \
 .\mvnw.cmd test
 ```
 
-Les tests d'intégration utilisent **Testcontainers** et nécessitent **Docker**. Les tests lisent aussi la configuration de `.env` : sans ce fichier, `APP_JWT_SECRET` doit être fourni par une variable d'environnement.
+Les tests d'intégration utilisent **Testcontainers** et nécessitent **Docker**. Les tests définissent leurs propres identifiants et leur propre secret JWT : ils ne dépendent pas de `.env`.
 
 Couverture :
 - Upload OK / KO
@@ -176,10 +191,20 @@ Couverture :
 
 ---
 
+## 🔒 Sécurité
+
+Le détail complet (mesures en place, gestion des secrets, checklist avant mise en ligne, risques résiduels) est dans **[SECURITY.md](SECURITY.md)**. En résumé :
+
+- Authentification par JWT court (30 min), mot de passe stocké sous forme de hash BCrypt, compte unique défini dans `.env`.
+- Accès fermé par défaut, HTTP Basic désactivé, erreurs sans détails internes, en-têtes de sécurité, bucket privé.
+- Aucun secret dans le dépôt : `.env` est ignoré par Git et Docker, `.env.example` sert de modèle.
+- **Avant la mise en ligne** : activer RLS sur la table `documents` dans Supabase et renouveler les secrets qui ont circulé hors de `.env` (checklist dans SECURITY.md).
+
 ## ⚠️ Points d'attention
 
-- **Compte administrateur** : l'utilisateur `admin` est défini en dur dans `SecurityConfig`. À remplacer par une authentification en base ou par des variables d'environnement avant toute mise en production publique.
-- **Migrations** : `spring.jpa.hibernate.ddl-auto` est à `update`. Les tables sont créées et modifiées automatiquement, sans migration versionnée.
+- **Compte unique** : un seul compte de service existe. Pour gérer plusieurs utilisateurs, il faudra passer à une authentification en base.
+- **Schéma de base** : `APP_DDL_AUTO=update` crée et modifie les tables automatiquement, sans migration versionnée. Passer à `validate` en production une fois les tables créées.
+- **Pas de limite d'essais sur `/auth/login`** : voir SECURITY.md, section « Limites connues ».
 
 ---
 

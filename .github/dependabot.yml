@@ -1,0 +1,11 @@
+# Mises à jour automatiques des dépendances (voir SECURITY.md, mesure 19).
+version: 2
+updates:
+  - package-ecosystem: "maven"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
